@@ -106,7 +106,7 @@ def processNextFile(vis):
         ymax = max(pointsInCluster[:, 1])
 
         raw_clusters += lineset_from_bounds(xmin, ymin, xmax, ymax, -0.01)
-        # vis.add_3d_label([xmax, ymax, 0], "{}".format(clusterIndex))
+        # vis.add_3d_label([xmax, ymax, 0], "RAW:{}".format(clusterIndex))
 
     detections = []
 
@@ -129,7 +129,8 @@ def processNextFile(vis):
             xmax = max(pointsInCluster[:, 0])
             ymax = max(pointsInCluster[:, 1])
 
-            detections.append([xmin, ymin, xmax, ymax])
+            detections.append([xmin, ymin, xmax, ymax, clusterIndex])
+            # vis.add_3d_label([xmax, ymax, 0], "DET:{}".format(clusterIndex))
 
         else:
             print("cluster " + str(clusterIndex) + " is too large with " + str(number_of_points) + " points")
@@ -143,7 +144,7 @@ def processNextFile(vis):
     # Add Detections to object tracker
     # update the state of the multi-object-tracker tracker
     # with the list of bounding boxes
-    tracker.step(detections=[Detection(box=bounding_box) for bounding_box in detections])
+    tracker.step(detections=[Detection(box=bounding_box[0:4]) for bounding_box in detections])
 
     # Trakcs (id, box)
     # retrieve the active tracks from the tracker (you can customize
@@ -155,9 +156,11 @@ def processNextFile(vis):
 
     # For each cluster with ID#, find closest active track
     # Make a copy of labeled points
-    final_labels = copy.deepcopy(labels)
+    final_labels = np.full(len(labels), -1)
 
-    for cluster_index, bounding_box in enumerate(detections):
+    for row in detections:
+        bounding_box = row[0:4]
+        cluster_index = row[4]
         closest_index = None
         closest_index_dist = 999999
         box_center = np.array(
@@ -205,6 +208,13 @@ def processNextFile(vis):
     o3d.io.write_point_cloud("data/" + SubFolderString + "/" + filename, pcd)
     #
 
+    # Also show MOT tracks
+    for track in tracks:
+        # For each sub-array compute centeroid, min, max
+        bb = track.box
+
+        active_tracks += lineset_from_bounds(bb[0], bb[1], bb[2], bb[3], 0.01)
+        vis.add_3d_label([bb[0], bb[1], 0], "{}".format(track.id[:5]))
 
     # Take labels array and sort each label into its own array
     max_final_label = max(final_labels)
@@ -223,15 +233,7 @@ def processNextFile(vis):
         ymax = max(pointsInCluster[:, 1])
 
         matched_clusters += lineset_from_bounds(xmin, ymin, xmax, ymax, -0.01)
-        vis.add_3d_label([(xmin+xmax)/2, (ymin+ymax)/2, 0], "{}".format(clusterIndex))
-
-    # Also show MOT tracks
-    for track in tracks:
-        # For each sub-array compute centeroid, min, max
-        bb = track.box
-
-        active_tracks += lineset_from_bounds(bb[0], bb[1], bb[2], bb[3], 0.01)
-        vis.add_3d_label([bb[0], bb[1], 0], "{}".format(track.id[:5]))
+        # vis.add_3d_label([(xmin+xmax)/2, (ymin+ymax)/2, 0], "{}".format(clusterIndex))
 
     colors = [[1, 0, 0] for i in range(len(active_tracks.lines))]
     active_tracks.colors = o3d.utility.Vector3dVector(colors)
@@ -245,19 +247,19 @@ def processNextFile(vis):
     if file_index == 1:
         vis.add_geometry("Point Cloud", pcd)
         vis.add_geometry("Raw Clusters (grey)", raw_clusters)
-        vis.add_geometry("Active Tracks (red)", active_tracks)
+        # vis.add_geometry("Active Tracks (red)", active_tracks)
         vis.add_geometry("Matched Clusters (green)", matched_clusters)
         # vis.run()
         vis.reset_camera_to_default()
     else:
         vis.remove_geometry("Point Cloud")
         vis.remove_geometry("Raw Clusters (grey)")
-        vis.remove_geometry("Active Tracks (red)")
+        # vis.remove_geometry("Active Tracks (red)")
         vis.remove_geometry("Matched Clusters (green)")
 
         vis.add_geometry("Point Cloud", pcd)
         vis.add_geometry("Raw Clusters (grey)", raw_clusters)
-        vis.add_geometry("Active Tracks (red)", active_tracks)
+        # vis.add_geometry("Active Tracks (red)", active_tracks)
         vis.add_geometry("Matched Clusters (green)", matched_clusters)
 
     file_index = file_index + 1
