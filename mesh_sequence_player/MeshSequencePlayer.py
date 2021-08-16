@@ -107,7 +107,7 @@ class MeshSequencePlayer:
                 line_set += self.lineset_from_bounds(xmin, ymin, xmax, ymax)
                 line_set_permanent += self.lineset_from_point(xave, yave)
             linesets.append(line_set)
-            linesetsPermanent.append(line_set)
+            linesetsPermanent.append(line_set_permanent)
         return linesets, linesetsPermanent
 
     def lineset_from_bounds(self, xmin, ymin, xmax, ymax):
@@ -134,7 +134,7 @@ class MeshSequencePlayer:
             [xave, yave, 0],
         ]
         lines = [
-            [0, 1],
+            # [0, 1],
         ]
         line_set = o3d.geometry.LineSet(
             points=o3d.utility.Vector3dVector(points),
@@ -175,7 +175,7 @@ class MeshSequencePlayer:
         self._current_lineset_permanent = self.linesetsPermanent[self._index]
         self.vis.add_geometry(self._current_geometry, reset_bounding_box=True)
         self.vis.add_geometry(self._current_lineset, reset_bounding_box=False)
-        self.vis.add_geometry(self._current_lineset_permanent, reset_bounding_box=False)
+        # self.vis.add_geometry(self._current_lineset_permanent, reset_bounding_box=False)
 
     def close(self):
         self._is_playing = False
@@ -242,7 +242,7 @@ class MeshSequencePlayer:
 
         self.vis.remove_geometry(self._current_geometry, reset_bounding_box=False)
         self.vis.remove_geometry(self._current_lineset, reset_bounding_box=False)
-        self.vis.remove_geometry(self._current_lineset_permanent, reset_bounding_box=False)
+        # self.vis.remove_geometry(self._current_lineset_permanent, reset_bounding_box=False)
         self._index = (self._index + 1) % len(self.geometries)
         self._current_geometry = self.geometries[self._index].get()
         self._current_lineset = self.linesets[self._index]

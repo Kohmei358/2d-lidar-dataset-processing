@@ -9,6 +9,11 @@ import open3d as o3d
 import numpy as np
 from matplotlib import pyplot as plt
 import os
+
+from open3d.cpu.pybind.visualization.gui import Label3D
+from open3d.visualization import gui
+
+from mesh_sequence_player.geometries.Geometry import Geometry
 from motpy import Detection, MultiObjectTracker
 
 from mesh_sequence_player.MeshSequencePlayer import MeshSequencePlayer
@@ -22,12 +27,12 @@ def write_ndarray_to_file(array, filename):
             f.write("%s\n" % item)
 
 
-def lineset_from_bounds(xmin, ymin, xmax, ymax):
+def lineset_from_bounds(xmin, ymin, xmax, ymax, height):
     points = [
-        [xmin, ymin, 0],
-        [xmax, ymin, 0],
-        [xmax, ymax, 0],
-        [xmin, ymax, 0],
+        [xmin, ymin, height],
+        [xmax, ymin, height],
+        [xmax, ymax, height],
+        [xmin, ymax, height],
     ]
     lines = [
         [0, 1],
@@ -43,14 +48,34 @@ def lineset_from_bounds(xmin, ymin, xmax, ymax):
 
 
 if __name__ == '__main__':
-    player = MeshSequencePlayer(fps=10, loop=False)
-    player.load_pointclouds("data/" + SubFolderString + "/", "*.pcd")
-    player.open(window_name="Mesh Sequence Player - %s" % SubFolderString,
-                width=1920, height=1080, visible=True)
+    # vis = o3d.visualization.Visualizer()
+    vis_current_pcd = None
+    vis_current_lineset = None
+    vis_current_lineset_permanent = None
 
-    player.play()
-    player.close()
-    time.sleep(100)
+    file_index = 0
+
+    app = gui.Application.instance
+    app.initialize()
+
+    vis = o3d.visualization.O3DVisualizer("Open3D - 3D Text", 1024, 768)
+
+
+    vis.show_settings = True
+
+    # vis.add_geometry("Points", points)
+    # for idx in range(0, len(points.points)):
+    #     vis.add_3d_label(points.points[idx], "{}".format(idx))
+    # vis.reset_camera_to_default()
+
+    # player = MeshSequencePlayer(fps=10, loop=False)
+    # player.load_pointclouds("data/" + SubFolderString + "/", "*.pcd")
+    # player.open(window_name="Mesh Sequence Player - %s" % SubFolderString,
+    #             width=1920, height=1080, visible=True)
+    #
+    # player.play()
+    # player.close()
+    # time.sleep(100)
 
     # create a multi object tracker with a specified step time of 100ms
     tracker = MultiObjectTracker(dt=0.1)
@@ -83,7 +108,7 @@ if __name__ == '__main__':
                 pointsInCluster = np.asarray(pcd.points)[clusterIndices]
                 number_of_points = len(pointsInCluster)
 
-                if(number_of_points < 999):
+                if(number_of_points < 50):
 
                     if number_of_points is 0:
                         print("HELP")
@@ -171,6 +196,7 @@ if __name__ == '__main__':
             o3d.io.write_point_cloud("data/" + SubFolderString + "/" + filename, pcd)
             #
             line_set = o3d.geometry.LineSet()
+            line_set_permanent = o3d.geometry.LineSet()
 
             # Take labels array and sort each label into its own array
             max_final_label = max(final_labels)
@@ -190,8 +216,49 @@ if __name__ == '__main__':
                 xmax = max(pointsInCluster[:, 0])
                 ymax = max(pointsInCluster[:, 1])
 
-                line_set += lineset_from_bounds(xmin, ymin, xmax, ymax)
+                line_set += lineset_from_bounds(xmin, ymin, xmax, ymax, -0.01)
+                vis.add_3d_label([xave, yave, 0], "{}".format(clusterIndex))
 
+
+            #Also show MOT tracks
+            for track in tracks:
+                # For each sub-array compute centeroid, min, max
+                bb = track.box
+
+                line_set_permanent += lineset_from_bounds(bb[0], bb[1], bb[2], bb[3], 0.01)
+                vis.add_3d_label([bb[0], bb[1], 0], "{}".format(track.id[:5]))
+
+            colors = [[1, 0, 0] for i in range(len(line_set_permanent.lines))]
+            line_set_permanent.colors = o3d.utility.Vector3dVector(colors)
+
+            if file_index == 0:
+                vis_current_pcd = pcd
+                vis_current_lineset = line_set
+                vis_current_lineset_permanent = line_set_permanent
+                vis.add_geometry("PCD", vis_current_pcd)
+                vis.add_geometry("LS1", vis_current_lineset)
+                vis.add_geometry("LS2", vis_current_lineset_permanent)
+                # vis.run()
+                vis.reset_camera_to_default()
+                app.add_window(vis)
+                app.run()
+            # else:
+            #     vis.remove_geometry("PCD")
+            #     vis.remove_geometry("LS1")
+            #     vis.remove_geometry("LS2")
+            #     # vis.remove_geometry(vis_current_pcd, reset_bounding_box=False)
+            #     # vis.remove_geometry(vis_current_lineset, reset_bounding_box=False)
+            #     # vis.remove_geometry(vis_current_lineset_permanent, reset_bounding_box=False)
+            #     vis_current_pcd = pcd
+            #     vis_current_lineset = line_set
+            #     vis_current_lineset_permanent = line_set_permanent
+            #     vis.add_geometry("PCD", vis_current_pcd)
+            #     vis.add_geometry("LS1", vis_current_lineset)
+            #     vis.add_geometry("LS2", vis_current_lineset_permanent)
+            #     vis.run()
+            #     input("Enter for next frame")
+
+            file_index = file_index + 1
             # o3d.visualization.draw_geometries([line_set, pcd])
-            #
-            # # o3d.visualization.draw_geometries([pcd])
+
+            # o3d.visualization.draw_geometries([pcd])
