@@ -30,7 +30,11 @@ ID_to_Label_dict = {}
 final_label_index = 0
 
 files = []
-file_index = 0
+file_index = 636
+
+batchProcess = False
+
+cameraResetTriggered = False
 
 
 
@@ -65,12 +69,19 @@ def callback(vis):
     vis.remove_geometry("LS1")
     vis.remove_geometry("LS2")
 
+def processAllFiles(vis):
+    global batchProcess
+    batchProcess = True
+    processNextFile(vis)
+
 
 def processNextFile(vis):
     # Compute detections and bounding boxes
     global file_index
     filename = files[file_index]
     file_index = file_index + 1
+
+    print(filename)
 
     vis.clear_3d_labels()
 
@@ -82,14 +93,14 @@ def processNextFile(vis):
     pcd = o3d.io.read_point_cloud("data/" + SubFolderString + "/" + filename)
 
     # Label clusters
-    labels = np.array(pcd.cluster_dbscan(eps=0.08, min_points=5, print_progress=False))
+    labels = np.array(pcd.cluster_dbscan(eps=0.05, min_points=5, print_progress=False))
 
     max_label = labels.max() + 1
-    print("I see " + str(max_label) + " labels from DBSCAN")
+    # print("I see " + str(max_label) + " labels from DBSCAN")
 
     # Take labels array and sort each label into its own array
     max_final_label = max(labels)
-    print("Generating bounding boxed for up to " + str(max_final_label + 1) + " raw clusters")
+    # print("Generating bounding boxed for up to " + str(max_final_label + 1) + " raw clusters")
     for clusterIndex in range(max_final_label + 1):
         clusterIndices = np.where(labels == clusterIndex)
         pointsInCluster = np.asarray(pcd.points)[clusterIndices]
@@ -116,7 +127,7 @@ def processNextFile(vis):
         pointsInCluster = np.asarray(pcd.points)[clusterIndices]
         number_of_points = len(pointsInCluster)
 
-        if (number_of_points < 30):
+        if (number_of_points < 40):
 
             if number_of_points is 0:
                 print("HELP")
@@ -133,13 +144,13 @@ def processNextFile(vis):
             # vis.add_3d_label([xmax, ymax, 0], "DET:{}".format(clusterIndex))
 
         else:
-            print("cluster " + str(clusterIndex) + " is too large with " + str(number_of_points) + " points")
+            # print("cluster " + str(clusterIndex) + " is too large with " + str(number_of_points) + " points")
             indices = np.where(labels == clusterIndex)
             np.put(labels, indices, -1)
 
     # Detections (Label#, box)
     # print(detections)
-    print("Now adding " + str(len(detections)) + " detections as observations to the tracker")
+    # print("Now adding " + str(len(detections)) + " detections as observations to the tracker")
 
     # Add Detections to object tracker
     # update the state of the multi-object-tracker tracker
@@ -151,7 +162,7 @@ def processNextFile(vis):
     # the hyperparameters of tracks filtering by passing extra arguments)
     tracks = tracker.active_tracks()
 
-    print('MOT tracker tracks %d active tracks' % len(tracks))
+    # print('MOT tracker tracks %d active tracks' % len(tracks))
     # print('first track box: %s' % str(tracks[0].box))
 
     # For each cluster with ID#, find closest active track
@@ -182,10 +193,10 @@ def processNextFile(vis):
             global final_label_index
             label_for_this_track = final_label_index
             ID_to_Label_dict.update({track.id: label_for_this_track})
-            print("newly matched "+str(track.id)+" to "+str(label_for_this_track))
+            # print("newly matched "+str(track.id)+" to "+str(label_for_this_track))
             final_label_index = final_label_index + 1
-        else:
-            print("matched "+str(track.id)+" to "+str(label_for_this_track))
+        # else:
+            # print("matched "+str(track.id)+" to "+str(label_for_this_track))
 
         indices = np.where(labels == cluster_index)
         np.put(final_labels, indices, [label_for_this_track])
@@ -193,8 +204,8 @@ def processNextFile(vis):
     # Remove the '.pcd' extention and write the labels as a .txt file
     stripped_filename = filename[:-4]
     write_ndarray_to_file(final_labels, "data/" + SubFolderString + "/" + stripped_filename + ".txt")
-    print("saved with " + str(len(np.unique(final_labels)) - 1) + " clusters:")
-    print(np.unique(final_labels))
+    # print("saved with " + str(len(np.unique(final_labels)) - 1) + " clusters:")
+    # print(np.unique(final_labels))
 
     # Color PCD
 
@@ -217,8 +228,8 @@ def processNextFile(vis):
         vis.add_3d_label([bb[0], bb[1], 0], "{}".format(track.id[:5]))
 
     # Take labels array and sort each label into its own array
-    max_final_label = max(final_labels)
-    print("Generating bounding boxed for up to " + str(max_final_label + 1) + " clusters")
+    # max_final_label = max(final_labels)
+    # print("Generating bounding boxed for up to " + str(max_final_label + 1) + " clusters")
     for clusterIndex in range(max_final_label + 1):
         clusterIndices = np.where(final_labels == clusterIndex)
         pointsInCluster = np.asarray(pcd.points)[clusterIndices]
@@ -232,8 +243,8 @@ def processNextFile(vis):
         xmax = max(pointsInCluster[:, 0])
         ymax = max(pointsInCluster[:, 1])
 
-        matched_clusters += lineset_from_bounds(xmin, ymin, xmax, ymax, -0.01)
-        # vis.add_3d_label([(xmin+xmax)/2, (ymin+ymax)/2, 0], "{}".format(clusterIndex))
+        matched_clusters += lineset_from_bounds(xmin, ymin, xmax, ymax, 0.02)
+        vis.add_3d_label([(xmin+xmax)/2, (ymin+ymax)/2, 0], "{}".format(clusterIndex))
 
     colors = [[1, 0, 0] for i in range(len(active_tracks.lines))]
     active_tracks.colors = o3d.utility.Vector3dVector(colors)
@@ -244,25 +255,24 @@ def processNextFile(vis):
     colors = [[0, 1, 0] for i in range(len(matched_clusters.lines))]
     matched_clusters.colors = o3d.utility.Vector3dVector(colors)
 
-    if file_index == 1:
-        vis.add_geometry("Point Cloud", pcd)
-        vis.add_geometry("Raw Clusters (grey)", raw_clusters)
-        # vis.add_geometry("Active Tracks (red)", active_tracks)
-        vis.add_geometry("Matched Clusters (green)", matched_clusters)
-        # vis.run()
+    vis.remove_geometry("Point Cloud")
+    vis.remove_geometry("Raw Clusters (grey)")
+    vis.remove_geometry("Active Tracks (red)")
+    vis.remove_geometry("Matched Clusters (green)")
+
+    vis.add_geometry("Point Cloud", pcd)
+    vis.add_geometry("Raw Clusters (grey)", raw_clusters)
+    vis.add_geometry("Active Tracks (red)", active_tracks)
+    vis.add_geometry("Matched Clusters (green)", matched_clusters)
+
+    global cameraResetTriggered
+    if not cameraResetTriggered:
         vis.reset_camera_to_default()
-    else:
-        vis.remove_geometry("Point Cloud")
-        vis.remove_geometry("Raw Clusters (grey)")
-        # vis.remove_geometry("Active Tracks (red)")
-        vis.remove_geometry("Matched Clusters (green)")
+        cameraResetTriggered = True
 
-        vis.add_geometry("Point Cloud", pcd)
-        vis.add_geometry("Raw Clusters (grey)", raw_clusters)
-        # vis.add_geometry("Active Tracks (red)", active_tracks)
-        vis.add_geometry("Matched Clusters (green)", matched_clusters)
-
-    file_index = file_index + 1
+    global batchProcess
+    if batchProcess:
+        processNextFile(vis)
     # o3d.visualization.draw_geometries([line_set, pcd])
 
     # o3d.visualization.draw_geometries([pcd])
@@ -297,11 +307,10 @@ if __name__ == '__main__':
     vis.show_settings = True
 
     vis.add_action("Next Frame", processNextFile)
+    vis.add_action("Process all", processAllFiles)
 
     app.add_window(vis)
     vis.add_3d_label([0, 0, 0], "Press \"Next Frame\" to show first frame!")
-    vis.reset_camera_to_default()
-    vis.post_redraw()
     app.run()
 
 
