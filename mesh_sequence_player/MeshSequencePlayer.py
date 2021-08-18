@@ -81,6 +81,9 @@ class MeshSequencePlayer:
 
     def load_linesets(self, labels_folder: str, labels_format: str = "*.txt"):
         files = sorted(get_files_in_path(labels_folder, extensions=[labels_format]))
+
+        files = list(filter(lambda filename: "FINAL" in filename, files))
+
         linesets = []
         linesetsPermanent = []
         for index, file in enumerate(files):
@@ -89,7 +92,7 @@ class MeshSequencePlayer:
             line_set = o3d.geometry.LineSet()
             line_set_permanent = o3d.geometry.LineSet()
             # Take labels array and sort each label into its own array
-            for clusterIndex in range(max_label):
+            for clusterIndex in range(max_label+1):
                 clusterIndices = np.where(labels == clusterIndex)
                 pointsInCluster = np.asarray(self.pcds[index].points)[clusterIndices]
 

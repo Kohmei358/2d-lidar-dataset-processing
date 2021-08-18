@@ -40,9 +40,10 @@ ID_to_Label_dict = {}
 final_label_index = 0
 
 files = []
-file_index = 635
+file_index = 0
 
 batchProcess = False
+batchProcessLimit = 100000
 
 cameraResetTriggered = False
 
@@ -82,6 +83,18 @@ def callback(vis):
 def processAllFiles(vis):
     global batchProcess
     batchProcess = True
+    processNextFile(vis)
+
+def process2(vis):
+    global batchProcess, batchProcessLimit
+    batchProcess = True
+    batchProcessLimit = file_index + 2
+    processNextFile(vis)
+
+def process10(vis):
+    global batchProcess, batchProcessLimit
+    batchProcess = True
+    batchProcessLimit = file_index + 10
     processNextFile(vis)
 
 
@@ -311,7 +324,7 @@ def processNextFile(vis):
         cameraResetTriggered = True
 
     global batchProcess
-    if batchProcess:
+    if batchProcess and batchProcessLimit > file_index:
         processNextFile(vis)
     # o3d.visualization.draw_geometries([line_set, pcd])
 
@@ -347,6 +360,8 @@ if __name__ == '__main__':
     vis.show_settings = True
 
     vis.add_action("Next Frame", processNextFile)
+    vis.add_action("Skip 2", process2)
+    vis.add_action("Skip 10", process10)
     vis.add_action("Process all", processAllFiles)
 
     app.add_window(vis)
