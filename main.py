@@ -10,6 +10,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 import os
 
+from sklearn.cluster import OPTICS, AgglomerativeClustering
+
 from open3d.cpu.pybind.visualization.gui import Label3D
 from open3d.visualization import gui
 
@@ -22,7 +24,15 @@ SubFolderString = "PCD_AK_Both"
 
 
 # create a multi object tracker with a specified step time of 100ms
-tracker = MultiObjectTracker(dt=0.1)
+
+model_spec = {
+        'order_pos': 2, 'dim_pos': 2, # position is a center in 2D space; under constant velocity model
+        'order_size': 0, 'dim_size': 2, # bounding box is 2 dimensional; under constant velocity model
+        'q_var_pos': 1000., # process noise
+        'r_var_pos': 0.1 # measurement noise
+    }
+
+tracker = MultiObjectTracker(dt=1, model_spec=model_spec)
 
 # Define hasmap to associate ID with label value
 # ID to label#
@@ -30,7 +40,7 @@ ID_to_Label_dict = {}
 final_label_index = 0
 
 files = []
-file_index = 636
+file_index = 635
 
 batchProcess = False
 
@@ -88,12 +98,21 @@ def processNextFile(vis):
     raw_clusters = o3d.geometry.LineSet()
     active_tracks = o3d.geometry.LineSet()
     matched_clusters = o3d.geometry.LineSet()
+    detections_lineset = o3d.geometry.LineSet()
 
     # Read pcd file as a point cloud, only loading location + color
     pcd = o3d.io.read_point_cloud("data/" + SubFolderString + "/" + filename)
 
+
+
     # Label clusters
-    labels = np.array(pcd.cluster_dbscan(eps=0.05, min_points=5, print_progress=False))
+    # labels = np.array(pcd.cluster_dbscan(eps=0.040, min_points=5, print_progress=False))
+    clustering = AgglomerativeClustering(n_clusters=140).fit(np.asarray(pcd.points))
+
+    # clustering = OPTICS(min_samples=6,xi=0.2).fit(np.asarray(pcd.points))
+
+    labels = clustering.labels_
+
 
     max_label = labels.max() + 1
     # print("I see " + str(max_label) + " labels from DBSCAN")
@@ -127,23 +146,37 @@ def processNextFile(vis):
         pointsInCluster = np.asarray(pcd.points)[clusterIndices]
         number_of_points = len(pointsInCluster)
 
-        if (number_of_points < 40):
+        delete_this_cluster = False
 
-            if number_of_points is 0:
-                print("HELP")
+        if (number_of_points > 100):
+            delete_this_cluster = True
 
-            # For each sub-array compute centeroid, min, max
-            xmin = min(pointsInCluster[:, 0])
-            ymin = min(pointsInCluster[:, 1])
-            # xave = np.average(pointsInCluster[:, 0])
-            # yave = np.average(pointsInCluster[:, 1])
-            xmax = max(pointsInCluster[:, 0])
-            ymax = max(pointsInCluster[:, 1])
+        if (number_of_points < 5):
+            delete_this_cluster = True
 
+        if number_of_points is 0:
+            print("HELP! this cluster to be processed has no points")
+
+        # For each sub-array compute centeroid, min, max
+        xmin = min(pointsInCluster[:, 0])
+        ymin = min(pointsInCluster[:, 1])
+        # xave = np.average(pointsInCluster[:, 0])
+        # yave = np.average(pointsInCluster[:, 1])
+        xmax = max(pointsInCluster[:, 0])
+        ymax = max(pointsInCluster[:, 1])
+
+        max_cluster_size = 0.6 #meters in either direciton
+        min_cluster_size = 0.0  # meters in either direciton
+        if max_cluster_size > abs(xmin - xmax) > min_cluster_size and \
+                max_cluster_size > abs(ymin - ymax) > min_cluster_size:
             detections.append([xmin, ymin, xmax, ymax, clusterIndex])
+            detections_lineset += lineset_from_bounds(xmin, ymin, xmax, ymax, -0.01)
             # vis.add_3d_label([xmax, ymax, 0], "DET:{}".format(clusterIndex))
-
         else:
+            delete_this_cluster = True
+
+
+        if delete_this_cluster:
             # print("cluster " + str(clusterIndex) + " is too large with " + str(number_of_points) + " points")
             indices = np.where(labels == clusterIndex)
             np.put(labels, indices, -1)
@@ -155,7 +188,9 @@ def processNextFile(vis):
     # Add Detections to object tracker
     # update the state of the multi-object-tracker tracker
     # with the list of bounding boxes
-    tracker.step(detections=[Detection(box=bounding_box[0:4]) for bounding_box in detections])
+    box_size = 0.5
+    tracker.step(detections=[Detection(box=[(bounding_box[0]+bounding_box[2]-box_size)/2,(bounding_box[1]+bounding_box[3]-box_size)/2,
+                                            (bounding_box[0]+bounding_box[2]+box_size)/2,(bounding_box[1]+bounding_box[3]+box_size)/2]) for bounding_box in detections])
 
     # Trakcs (id, box)
     # retrieve the active tracks from the tracker (you can customize
@@ -225,10 +260,10 @@ def processNextFile(vis):
         bb = track.box
 
         active_tracks += lineset_from_bounds(bb[0], bb[1], bb[2], bb[3], 0.01)
-        vis.add_3d_label([bb[0], bb[1], 0], "{}".format(track.id[:5]))
+        # vis.add_3d_label([bb[0], bb[1], 0], "{}".format(track.id[:5]))
 
     # Take labels array and sort each label into its own array
-    # max_final_label = max(final_labels)
+    max_final_label = max(final_labels)
     # print("Generating bounding boxed for up to " + str(max_final_label + 1) + " clusters")
     for clusterIndex in range(max_final_label + 1):
         clusterIndices = np.where(final_labels == clusterIndex)
@@ -255,15 +290,20 @@ def processNextFile(vis):
     colors = [[0, 1, 0] for i in range(len(matched_clusters.lines))]
     matched_clusters.colors = o3d.utility.Vector3dVector(colors)
 
+    colors = [[0, 0, 1] for i in range(len(detections_lineset.lines))]
+    detections_lineset.colors = o3d.utility.Vector3dVector(colors)
+
     vis.remove_geometry("Point Cloud")
     vis.remove_geometry("Raw Clusters (grey)")
     vis.remove_geometry("Active Tracks (red)")
     vis.remove_geometry("Matched Clusters (green)")
+    vis.remove_geometry("Detected Clusters (blue)")
 
     vis.add_geometry("Point Cloud", pcd)
     vis.add_geometry("Raw Clusters (grey)", raw_clusters)
-    vis.add_geometry("Active Tracks (red)", active_tracks)
-    vis.add_geometry("Matched Clusters (green)", matched_clusters)
+    # vis.add_geometry("Active Tracks (red)", active_tracks)
+    # vis.add_geometry("Matched Clusters (green)", matched_clusters)
+    # vis.add_geometry("Detected Clusters (blue)", detections_lineset)
 
     global cameraResetTriggered
     if not cameraResetTriggered:
