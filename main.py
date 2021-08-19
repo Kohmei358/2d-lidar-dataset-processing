@@ -97,12 +97,26 @@ def process10(vis):
     batchProcessLimit = file_index + 10
     processNextFile(vis)
 
+def process50(vis):
+    global batchProcess, batchProcessLimit
+    batchProcess = True
+    batchProcessLimit = file_index + 50
+    processNextFile(vis)
+
+def process600(vis):
+    global batchProcess, batchProcessLimit
+    batchProcess = True
+    batchProcessLimit = file_index + 600
+    processNextFile(vis)
+
 
 def processNextFile(vis):
     # Compute detections and bounding boxes
     global file_index
     filename = files[file_index]
     file_index = file_index + 1
+
+    vis.title = str(file_index)
 
     print(filename)
 
@@ -183,7 +197,7 @@ def processNextFile(vis):
         if max_cluster_size > abs(xmin - xmax) > min_cluster_size and \
                 max_cluster_size > abs(ymin - ymax) > min_cluster_size:
             detections.append([xmin, ymin, xmax, ymax, clusterIndex])
-            detections_lineset += lineset_from_bounds(xmin, ymin, xmax, ymax, -0.01)
+            # detections_lineset += lineset_from_bounds(xmin, ymin, xmax, ymax, -0.01)
             # vis.add_3d_label([xmax, ymax, 0], "DET:{}".format(clusterIndex))
         else:
             delete_this_cluster = True
@@ -258,13 +272,13 @@ def processNextFile(vis):
     # Color PCD
 
     # Convert Labels to colors
-    max_label = 9
-    colors = plt.get_cmap("tab10")(final_labels % 10 / max_label)
-    colors[labels < 0] = 0  # Background should be black
-    pcd.colors = o3d.utility.Vector3dVector(colors[:, :3])
+    # max_label = 9
+    # colors = plt.get_cmap("tab10")(final_labels % 10 / max_label)
+    # colors[labels < 0] = 0  # Background should be black
+    # pcd.colors = o3d.utility.Vector3dVector(colors[:, :3])
 
     # Write colored point cloud to file
-    o3d.io.write_point_cloud("data/" + SubFolderString + "/" + filename, pcd)
+    # o3d.io.write_point_cloud("data/" + SubFolderString + "/" + filename, pcd)
     #
 
     # Also show MOT tracks
@@ -272,7 +286,7 @@ def processNextFile(vis):
         # For each sub-array compute centeroid, min, max
         bb = track.box
 
-        active_tracks += lineset_from_bounds(bb[0], bb[1], bb[2], bb[3], 0.01)
+        # active_tracks += lineset_from_bounds(bb[0], bb[1], bb[2], bb[3], 0.01)
         # vis.add_3d_label([bb[0], bb[1], 0], "{}".format(track.id[:5]))
 
     # Take labels array and sort each label into its own array
@@ -293,6 +307,32 @@ def processNextFile(vis):
 
         matched_clusters += lineset_from_bounds(xmin, ymin, xmax, ymax, 0.02)
         vis.add_3d_label([(xmin+xmax)/2, (ymin+ymax)/2, 0], "{}".format(clusterIndex))
+
+
+    external_labels = np.loadtxt('data/' + SubFolderString + '/FINAL_' + stripped_filename + '.txt',dtype=int)
+    max_external_labels = max(external_labels)
+    for clusterIndex in range(max_external_labels + 1):
+        clusterIndices = np.where(external_labels == clusterIndex)
+        pointsInCluster = np.asarray(pcd.points)[clusterIndices]
+
+        if(len(pointsInCluster) == 0):
+            continue
+
+        # For each sub-array compute centeroid, min, max
+        xmin = min(pointsInCluster[:, 0])
+        ymin = min(pointsInCluster[:, 1])
+        xmax = max(pointsInCluster[:, 0])
+        ymax = max(pointsInCluster[:, 1])
+
+        detections_lineset += lineset_from_bounds(xmin, ymin, xmax, ymax, 0.02)
+
+    max_label = 9
+    colors = plt.get_cmap("tab10")(external_labels % 10 / max_label)
+    colors[external_labels < 0] = 0  # Background should be black
+    pcd.colors = o3d.utility.Vector3dVector(colors[:, :3])
+    o3d.io.write_point_cloud("data/" + SubFolderString + "/" + filename, pcd)
+
+
 
     colors = [[1, 0, 0] for i in range(len(active_tracks.lines))]
     active_tracks.colors = o3d.utility.Vector3dVector(colors)
@@ -316,7 +356,7 @@ def processNextFile(vis):
     vis.add_geometry("Raw Clusters (grey)", raw_clusters)
     # vis.add_geometry("Active Tracks (red)", active_tracks)
     # vis.add_geometry("Matched Clusters (green)", matched_clusters)
-    # vis.add_geometry("Detected Clusters (blue)", detections_lineset)
+    vis.add_geometry("Detected Clusters (blue)", detections_lineset)
 
     global cameraResetTriggered
     if not cameraResetTriggered:
@@ -362,6 +402,8 @@ if __name__ == '__main__':
     vis.add_action("Next Frame", processNextFile)
     vis.add_action("Skip 2", process2)
     vis.add_action("Skip 10", process10)
+    vis.add_action("Skip 50", process50)
+    vis.add_action("Skip 600", process600)
     vis.add_action("Process all", processAllFiles)
 
     app.add_window(vis)
