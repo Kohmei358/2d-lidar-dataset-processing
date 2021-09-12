@@ -175,7 +175,7 @@ def processNextFile(vis):
 
         delete_this_cluster = False
 
-        if (number_of_points > 100):
+        if (number_of_points > 60):
             delete_this_cluster = True
 
         if (number_of_points < 5):
@@ -265,20 +265,20 @@ def processNextFile(vis):
 
     # Remove the '.pcd' extention and write the labels as a .txt file
     stripped_filename = filename[:-4]
-    write_ndarray_to_file(final_labels, "data/" + SubFolderString + "/" + stripped_filename + ".txt")
+    write_ndarray_to_file(final_labels, "data/" + SubFolderString + "/AGGLOMERATIVE_" + stripped_filename + ".txt")
     # print("saved with " + str(len(np.unique(final_labels)) - 1) + " clusters:")
     # print(np.unique(final_labels))
 
     # Color PCD
 
     # Convert Labels to colors
-    # max_label = 9
-    # colors = plt.get_cmap("tab10")(final_labels % 10 / max_label)
-    # colors[labels < 0] = 0  # Background should be black
-    # pcd.colors = o3d.utility.Vector3dVector(colors[:, :3])
+    max_label = 9
+    colors = plt.get_cmap("tab10")(final_labels % 10 / max_label)
+    colors[labels < 0] = 0  # Background should be black
+    pcd.colors = o3d.utility.Vector3dVector(colors[:, :3])
 
     # Write colored point cloud to file
-    # o3d.io.write_point_cloud("data/" + SubFolderString + "/" + filename, pcd)
+    o3d.io.write_point_cloud("data/" + SubFolderString + "/" + filename, pcd)
     #
 
     # Also show MOT tracks
@@ -286,7 +286,7 @@ def processNextFile(vis):
         # For each sub-array compute centeroid, min, max
         bb = track.box
 
-        # active_tracks += lineset_from_bounds(bb[0], bb[1], bb[2], bb[3], 0.01)
+        active_tracks += lineset_from_bounds(bb[0], bb[1], bb[2], bb[3], 0.01)
         # vis.add_3d_label([bb[0], bb[1], 0], "{}".format(track.id[:5]))
 
     # Take labels array and sort each label into its own array
@@ -326,11 +326,11 @@ def processNextFile(vis):
 
         detections_lineset += lineset_from_bounds(xmin, ymin, xmax, ymax, 0.02)
 
-    max_label = 9
-    colors = plt.get_cmap("tab10")(external_labels % 10 / max_label)
-    colors[external_labels < 0] = 0  # Background should be black
-    pcd.colors = o3d.utility.Vector3dVector(colors[:, :3])
-    o3d.io.write_point_cloud("data/" + SubFolderString + "/" + filename, pcd)
+    # max_label = 9
+    # colors = plt.get_cmap("tab10")(external_labels % 10 / max_label)
+    # colors[external_labels < 0] = 0  # Background should be black
+    # pcd.colors = o3d.utility.Vector3dVector(colors[:, :3])
+    # o3d.io.write_point_cloud("data/" + SubFolderString + "/" + filename, pcd)
 
 
 
@@ -354,9 +354,9 @@ def processNextFile(vis):
 
     vis.add_geometry("Point Cloud", pcd)
     vis.add_geometry("Raw Clusters (grey)", raw_clusters)
-    # vis.add_geometry("Active Tracks (red)", active_tracks)
+    vis.add_geometry("Active Tracks (red)", active_tracks)
     # vis.add_geometry("Matched Clusters (green)", matched_clusters)
-    vis.add_geometry("Detected Clusters (blue)", detections_lineset)
+    # vis.add_geometry("Detected Clusters (blue)", detections_lineset)
 
     global cameraResetTriggered
     if not cameraResetTriggered:
